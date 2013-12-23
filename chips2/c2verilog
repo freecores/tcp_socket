@@ -7,8 +7,16 @@ __version__ = "0.1"
 
 import sys
 import os
+import subprocess
+import atexit
 
 from chips.compiler.compiler import comp
+
+children = []
+def cleanup():
+    for child in children:
+        child.terminate()
+atexit.register(cleanup)
 
 if len(sys.argv) < 2 or "help" in sys.argv or "h" in sys.argv:
     print "Usage: c2verilog.py [options] <input_file>"
@@ -29,21 +37,24 @@ options = sys.argv[1:-1]
 name, inputs, outputs, documentation = comp(input_file, options)
 
 
+
 #run the compiled design using the simulator of your choice.
 if "iverilog" in sys.argv:
-    import os
-    import tempfile
-    import shutil
     verilog_file = os.path.abspath("%s.v"%name)
-    #tempdir = tempfile.mkdtemp()
-    #os.chdir(tempdir)
-    os.system("iverilog -o %s %s"%(name, verilog_file))
+    process = subprocess.Popen(["iverilog", "-o", str(name), str(verilog_file)])
+    children.append(process)
+    result = process.wait()
+    children.remove(process)
+
+    if result:
+      print "Verilog output failed to compile correctly"
+      sys.exit(result)
+
     if "run" in sys.argv:
-      result = os.system("vvp %s"%name)
-      if result:
-        sys.exit(1)
-      else:
-        sys.exit(0)
-    #shutil.rmtree(tempdir)
+      process = subprocess.Popen(["vvp", str(name)])
+      children.append(process)
+      result = process.wait()
+      children.remove(process)
+      sys.exit(result)
 
 #Add more tools here ...
